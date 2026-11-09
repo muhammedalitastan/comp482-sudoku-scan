@@ -162,7 +162,7 @@
     ]
   ],
   "verdict": "invalid",
-  "runtime_s": 1.463,
+  "runtime_s": 1.413,
   "image_path": "test_photos\\10.jpeg",
   "message": "",
   "corner_selection_method": "contour+harris",
@@ -545,10 +545,10 @@
   },
   "stage_times": {
     "preprocessing": 0.054,
-    "corner_detection": 0.075,
+    "corner_detection": 0.081,
     "rectification": 0.002,
-    "metrics": 0.003,
-    "ocr": 0.589,
-    "validity_check": 0.71
+    "metrics": 0.002,
+    "ocr": 0.586,
+    "validity_check": 0.656
   }
 }

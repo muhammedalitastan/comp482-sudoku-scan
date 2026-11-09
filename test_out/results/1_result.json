@@ -7,7 +7,7 @@
   "a4_rms_px": null,
   "grid": null,
   "verdict": "not_found",
-  "runtime_s": 0.146,
+  "runtime_s": 0.147,
   "image_path": "test_photos\\1.jpeg",
   "message": "no Harris corner found near a grid vertex",
   "corner_selection_method": null,
@@ -22,7 +22,7 @@
     "unprepared_non_empty": null
   },
   "stage_times": {
-    "preprocessing": 0.052,
-    "corner_detection": 0.076
+    "preprocessing": 0.053,
+    "corner_detection": 0.075
   }
 }
