@@ -24,12 +24,14 @@ Install Tesseract OCR for Windows:
 
 ### Single Image
 ```bash
+python sudoku_scan.py input photo.jpg --outdir out/
+# the bare form also works:
 python sudoku_scan.py photo.jpg --outdir results/
 ```
 
 ### Batch Processing
 ```bash
-python sudoku_scan.py --batch images/ --outdir results/
+python sudoku_scan.py --batch images_dir/ --outdir results/
 ```
 
 ### With Custom Harris Parameters
@@ -58,14 +60,13 @@ For each input image, the following files are generated in the output directory:
 - Dilation for edge connection
 
 ### 2. Harris Corner Detection
-- Uses `cv2.cornerHarris` for corner detection
-- Applies non-maximum suppression
-- Refines corners with `cv2.cornerSubPix`
-- **Automatically selects 4 outer corners** using rule-based approach:
-  - TL: minimum (x + y)
-  - TR: maximum (x - y)
-  - BR: maximum (x + y)
-  - BL: minimum (x - y)
+- Uses `cv2.cornerHarris` on the blurred grayscale image for corner detection
+- Keeps only local maxima above a relative threshold, then applies greedy non-maximum suppression
+- `cv2.approxPolyDP` on the largest external contour is used ONLY to propose the grid region (never as a corner source)
+- Every region vertex is matched to the nearest Harris local maximum inside a small window - the final corner coordinate always comes from the Harris response map (`cornerSubPix` refines it)
+- Fallback when no region is found: rule-based selection over all candidates
+  - TL: minimum (x + y), TR: maximum (x - y), BR: maximum (x + y), BL: minimum (x - y)
+- The quadrilateral is validated (distinct points, convexity, minimum area) and corners are ordered TL, TR, BR, BL
 
 ### 3. Rectification
 Three transformation methods to 450x450 target (50px per cell):
@@ -80,9 +81,13 @@ Three transformation methods to 450x450 target (50px per cell):
   - Perfect alignment of all 4 corners
 
 ### 4. Comparison Metrics
-- **Corner residuals**: A3 4th corner error, A4 RMS error
-- **Grid line straightness**: Deviation from ideal 50px intervals
-- **OCR accuracy**: Prepared vs unprepared cell preprocessing
+- **Corner residuals**: A3 4th corner error, A4 RMS error (vs obliqueness)
+- **Grid line straightness**: Deviation of the 10 horizontal + 10 vertical lines from ideal 50 px positions (morphological line isolation)
+- **OCR accuracy**: the same prepared-cell OCR run on the A3, A4 and H4 rectifications, scored against ground-truth annotations
+- `compare_rectifications.py` produces the full A3/A4/H4 comparison table and CSV from the result JSONs + saved rectification images:
+  ```bash
+  python compare_rectifications.py --results out/ --annotations labels/ --index side_ratios.csv --out comparison.csv
+  ```
 
 ### 5. Cell Extraction & OCR
 - Extracts 81 cells from 450x450 rectified image
@@ -109,6 +114,8 @@ Three transformation methods to 450x450 target (50px per cell):
 - `ValidityCheck.py` - Sudoku validity checking
 - `Metrics.py` - Grid-line straightness (10 horizontal + 10 vertical lines vs ideal 50 px positions) and OCR accuracy metrics
 - `sudoku_scan.py` - Main CLI interface
+- `compare_rectifications.py` - Stage 4 metric script: A3/A4/H4 corner residuals, grid straightness and OCR accuracy comparison
+- `evaluate_devset.py` - Development-set evaluation: corner errors, rectification errors, grid-line deviations and OCR accuracy vs annotations
 
 ## Dataset Requirements
 Collect at least 10 photos from 3 different Sudoku sources with:
@@ -116,13 +123,13 @@ Collect at least 10 photos from 3 different Sudoku sources with:
 - Various conditions: frontal, oblique (>40°), rotated, uneven lighting, complex backgrounds
 
 ## Important Notes
-- **All corners must come from Harris detection** - no contour-based or manual selection
+- **Final corner coordinates always come from Harris detection** - `approxPolyDP`/contours only propose the region; every final corner is snapped to a Harris response maximum and refined with `cornerSubPix`
 - **No deep learning models** for corner detection
 - **All parameters are relative to image size** for scalability
 - **Stage 2 (corner selection) and Stage 4 (comparison) must be written without AI assistance**
 
 ## Command Line Arguments
-- `image` - Input image path (or use --batch)
+- `image` - Input image path (the optional `input` prefix is also accepted); use `--batch` for directories
 - `--batch` - Directory for batch processing
 - `--outdir` - Output directory (required)
 - `--blockSize` - Harris blockSize (default: 2)
