@@ -1,12 +1,8 @@
-"""
-Stage 3 - Rectification.
+"""Stage 3 - Rectification to a 450x450 square (50 px per cell).
 
-Maps the 4 detected corners [TL, TR, BR, BL] onto a 450x450 square
-(50 px per cell) with three methods:
-
-  A3-affine     : 3 points (TL, TR, BL) -> cv2.getAffineTransform
-  A4-affine     : 4 points, least squares -> cv2.estimateAffine2D
-  H4-homography : 4 points -> cv2.getPerspectiveTransform
+A3: 3 points (TL, TR, BL) via getAffineTransform.
+A4: 4 points via estimateAffine2D (least squares over all corners).
+H4: 4 points via getPerspectiveTransform.
 """
 
 import cv2
@@ -34,13 +30,7 @@ def _as_corners(corners) -> np.ndarray:
 
 
 def rectify_A3_affine(image: np.ndarray, corners) -> tuple:
-    """
-    Affine transform from 3 corners (TL, TR, BL).
-
-    Returns (warped, projected_br, br_error_px, M).
-    The 4th corner (BR) is not used by the transform; we report where it
-    actually lands and its pixel distance to the ideal (449, 449).
-    """
+    """Affine from TL, TR, BL. Returns (warped, projected_br, br_error_px, M)."""
     pts = _as_corners(corners)
     src = np.array([pts[0], pts[1], pts[3]], dtype=np.float32)  # TL, TR, BL
     dst = _destination_points()[[0, 1, 3]]
@@ -55,12 +45,7 @@ def rectify_A3_affine(image: np.ndarray, corners) -> tuple:
 
 
 def rectify_A4_affine(image: np.ndarray, corners) -> tuple:
-    """
-    Affine transform from all 4 corners with least squares.
-
-    Returns (warped, rms_error_px, M), where rms_error_px is the RMS residual
-    over the 4 corners.
-    """
+    """Affine from all 4 corners, least squares. Returns (warped, rms_px, M)."""
     pts = _as_corners(corners)
     dst = _destination_points()
 

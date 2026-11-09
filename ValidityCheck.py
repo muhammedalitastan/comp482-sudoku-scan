@@ -1,16 +1,10 @@
-"""
-Stage 6 - Sudoku validity check.
-
-A grid is valid when no digit 1-9 appears twice in the same row, column or
-3x3 box. Empty cells (0) are ignored. Returns the conflicting cell
-positions so they can be highlighted in the debug image.
-"""
+"""Stage 6 - Sudoku rule check: no digit repeats in a row, column or 3x3 box."""
 
 import numpy as np
 
 
 def _units():
-    """Yield the 27 Sudoku units (9 rows, 9 columns, 9 boxes) as (row, col) lists."""
+    """Yield the 27 Sudoku units as (row, col) lists."""
     for r in range(9):
         yield [(r, c) for c in range(9)]
     for c in range(9):
@@ -21,10 +15,7 @@ def _units():
 
 
 def check_sudoku_validity(grid) -> tuple:
-    """
-    Returns (is_valid, conflicts) where conflicts is a sorted list of
-    (row, col) tuples involved in at least one rule violation.
-    """
+    """Return (is_valid, conflicts); conflicts is a sorted (row, col) list."""
     grid = np.asarray(grid)
     conflicts = set()
 

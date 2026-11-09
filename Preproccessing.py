@@ -1,15 +1,8 @@
-"""
-Stage 1 - Preprocessing.
+"""Stage 1 - Preprocessing.
 
-Produces the image representations used by the later stages:
-
-  * gray      - grayscale image (rectification source and OCR input)
-  * blurred   - denoised grayscale (Harris corner detection)
-  * threshold - adaptive binary image, dark structures on light background
-  * edges     - dilated Canny edges
-
-Every parameter is relative to the image width, so the same code works for
-any photo resolution.
+Returns the representations the later stages need: gray (rectification +
+OCR), blurred (Harris), threshold (grid region) and edges. Every parameter
+is relative to the image width so any photo resolution works.
 """
 
 import cv2
@@ -33,7 +26,14 @@ def _odd(value: int) -> int:
 
 
 def preprocess_image(image_path: str) -> PreprocessedImage:
-    img = cv2.imread(image_path)
+    """Load an image and build gray / blurred / threshold / edges."""
+    # cv2.imread fails on non-ASCII paths (e.g. Turkish filenames), so read
+    # the bytes ourselves and decode.
+    try:
+        data = np.fromfile(image_path, dtype=np.uint8)
+        img = cv2.imdecode(data, cv2.IMREAD_COLOR)
+    except (OSError, ValueError):
+        img = None
     if img is None:
         raise FileNotFoundError(f"Cannot read image file: {image_path}")
 

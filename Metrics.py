@@ -1,11 +1,8 @@
-"""
-Comparison metrics for Stage 4.
+"""Stage 4 metrics - grid-line straightness on the 450x450 rectified image.
 
-Grid-line straightness: after rectification the 10 horizontal and 10
-vertical grid lines should sit exactly at multiples of 50 px. We isolate the
-lines with morphological opening (wide horizontal/vertical structuring
-elements remove digit strokes) and measure how far each detected line is
-from its ideal position.
+Morphological opening removes digit strokes so only the grid lines remain;
+each of the 10 horizontal + 10 vertical lines is matched to its ideal 50 px
+position and the deviation is measured.
 """
 
 import cv2
@@ -25,10 +22,7 @@ def _binarize(image: np.ndarray) -> np.ndarray:
 
 
 def _line_profile(binary: np.ndarray, orientation: str) -> np.ndarray:
-    """
-    Dark-pixel count per row (orientation="h") or per column ("v") after
-    keeping only long horizontal/vertical runs (the grid lines).
-    """
+    """Dark-pixel count per row ("h") or per column ("v") after line isolation."""
     if orientation == "h":
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (_LINE_KERNEL, 1))
     else:
@@ -38,15 +32,7 @@ def _line_profile(binary: np.ndarray, orientation: str) -> np.ndarray:
 
 
 def _measure_axis(profile: np.ndarray, ideal_positions) -> dict:
-    """
-    For every ideal line position, find the strongest line within
-    _SEARCH_RADIUS and return its detected position and deviation.
-
-    A line whose peak is too weak is reported as not found (None values).
-    The mean is computed over the lines that were actually found, so the
-    score reflects rectification quality instead of penalizing borders that
-    fall outside the 450x450 canvas.
-    """
+    """Match each ideal line position to the strongest nearby line; report deviations."""
     ideal_list = [int(p) for p in ideal_positions]
     detected, deviations = [], []
 
@@ -76,13 +62,7 @@ def _measure_axis(profile: np.ndarray, ideal_positions) -> dict:
 
 
 def calculate_grid_line_straightness(warped: np.ndarray) -> dict:
-    """
-    Measure the deviation of the 10 horizontal and 10 vertical grid lines
-    from their ideal positions (0, 50, ..., 450 px) in a rectified image.
-
-    Returns per-axis detected positions, deviations, found-line counts and
-    means, plus the overall mean over all found lines.
-    """
+    """Deviation of the 10+10 grid lines from their ideal 50 px positions."""
     binary = _binarize(warped)
     ideal = list(range(0, TARGET_SIZE + 1, CELL_SIZE))  # 0, 50, ..., 450
 

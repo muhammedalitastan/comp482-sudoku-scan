@@ -1,20 +1,10 @@
-"""
-Stage 5 - digit recognition with Tesseract OCR.
+"""Stage 5 - Tesseract OCR on the rectified grid.
 
-Every cell is first checked with an ink-ratio criterion so empty cells never
-reach the OCR engine. Recognition is restricted to the digits 1-9 (Sudoku
-grids contain no zeros).
-
-All non-empty cells are placed on a single montage image and recognized
-with one Tesseract call per pass (two passes per mode at most), which
-keeps the runtime far below the 20 s limit. Character boxes are mapped
-back to cells by their center position.
-
-Two OCR modes are supported:
-  prepared=True  -> crop to the digit bounding box, force the background
-                    to white and center the digit on a canvas (ink keeps
-                    its gray value; only the background is normalized)
-  prepared=False -> raw cell image (used for the accuracy comparison)
+Empty cells are filtered by ink ratio before OCR, and recognition is
+restricted to digits 1-9. Non-empty cells are packed into one montage image
+per pass (a second sparse-text pass retries the missed ones) to stay far
+below the 20 s limit. prepared=True normalizes each cell (crop, white
+background, centered); prepared=False feeds the raw cell for comparison.
 """
 
 import os
@@ -23,24 +13,21 @@ import cv2
 import numpy as np
 import pytesseract
 
-_DEFAULT_TESSERACT_CMD = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-if os.path.exists(_DEFAULT_TESSERACT_CMD):
-    pytesseract.pytesseract.tesseract_cmd = _DEFAULT_TESSERACT_CMD
+# Use the Windows Tesseract install when present; otherwise PATH is used.
+if os.path.exists(r"C:\Program Files\Tesseract-OCR\tesseract.exe"):
+    pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
-_MONTAGE_CONFIG = r"--oem 3 --psm 6 -c tessedit_char_whitelist=123456789"
-_MONTAGE_RETRY_CONFIG = r"--oem 3 --psm 11 -c tessedit_char_whitelist=123456789"
 _MIN_INK_RATIO = 0.02
 _DIGITS = "123456789"
 
-_MONTAGE_CELL = 64  # slot size per cell in the montage
-_MONTAGE_GAP = 16  # white gap between slots
-_MONTAGE_INNER = 48  # digit canvas placed inside a slot
-_MONTAGE_SIZE = 9 * _MONTAGE_CELL + 10 * _MONTAGE_GAP
-
 
 def is_cell_empty(cell, min_ink_ratio: float = _MIN_INK_RATIO) -> bool:
-    """True when the fraction of dark pixels is below the threshold."""
+    """True when the cell has no digit: flat background or almost no ink."""
     if cell is None or cell.size == 0:
+        return True
+    # A nearly uniform cell (shaded background, shadow) cannot contain a
+    # digit; Otsu would split its noise ~50/50 and fake a high ink ratio.
+    if float(cell.std()) < 10.0:
         return True
     _, binary = cv2.threshold(cell, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
     ink_ratio = cv2.countNonZero(binary) / cell.size
@@ -48,13 +35,7 @@ def is_cell_empty(cell, min_ink_ratio: float = _MIN_INK_RATIO) -> bool:
 
 
 def preprocess_cell(cell: np.ndarray) -> np.ndarray:
-    """
-    Crop the cell to the digit bounding box and center it on a 28x28
-    canvas. Inside the crop, Otsu binarization separates the dark ink from
-    the paper; ink pixels keep their gray value and the background is
-    forced to pure white so dark or unevenly lit photos produce the same
-    high-contrast input as clean scans.
-    """
+    """Crop to the digit, force the background white, center on a 28x28 canvas."""
     if cell is None or cell.size == 0:
         return cell
 
@@ -86,6 +67,27 @@ def preprocess_cell(cell: np.ndarray) -> np.ndarray:
     return canvas
 
 
+# Montage layout: one 64px slot per cell, 16px gaps, 48px digit canvas.
+_MONTAGE_CELL = 64
+_MONTAGE_GAP = 16
+_MONTAGE_INNER = 48
+_MONTAGE_SIZE = 9 * _MONTAGE_CELL + 10 * _MONTAGE_GAP
+
+_MONTAGE_CONFIG = r"--oem 3 --psm 6 -c tessedit_char_whitelist=123456789"
+_MONTAGE_RETRY_CONFIG = r"--oem 3 --psm 11 -c tessedit_char_whitelist=123456789"
+# Raw cells keep their gray photo background; Tesseract's default Otsu
+# thresholding drowns in it, so unprepared passes need adaptive thresholding.
+_UNPREPARED_CONFIG = (
+    r"--oem 3 --psm 6 -c tessedit_char_whitelist=123456789"
+    r" -c thresholding_method=1"
+)
+_UNPREPARED_RETRY_CONFIG = (
+    r"--oem 3 --psm 11 -c tessedit_char_whitelist=123456789"
+    r" -c thresholding_method=1"
+)
+_SINGLE_CELL_CONFIG = r"--oem 3 --psm 10 -c tessedit_char_whitelist=123456789"
+
+
 def _digit_canvas(cell: np.ndarray, prepared: bool):
     """Normalized digit image (_MONTAGE_INNER square) or None."""
     if prepared:
@@ -98,10 +100,7 @@ def _digit_canvas(cell: np.ndarray, prepared: bool):
 
 
 def _build_montage(cells, prepared: bool, only: np.ndarray | None = None) -> np.ndarray:
-    """
-    Place every non-empty cell on one white montage image.
-    `only` optionally restricts which (row, col) cells are placed.
-    """
+    """Pack non-empty cells onto one white montage; `only` restricts positions."""
     montage = np.full((_MONTAGE_SIZE, _MONTAGE_SIZE), 255, np.uint8)
     offset = (_MONTAGE_CELL - _MONTAGE_INNER) // 2
 
@@ -128,17 +127,13 @@ def _cell_index(center: float, gap: int = _MONTAGE_GAP) -> int:
 
 
 def _read_montage(montage: np.ndarray, config: str = _MONTAGE_CONFIG) -> np.ndarray:
-    """
-    One Tesseract call on the montage; map character boxes back to cells.
-
-    image_to_boxes returns one line per character:
-        <char> <left> <bottom> <right> <top> <page>
-    with y measured from the BOTTOM of the image.
-    """
+    """One Tesseract call; map character boxes back to cells via their centers."""
     grid = np.zeros((9, 9), dtype=int)
     height = montage.shape[0]
 
     try:
+        # image_to_boxes lines: <char> <left> <bottom> <right> <top> <page>,
+        # y measured from the bottom of the image.
         boxes = pytesseract.image_to_boxes(montage, config=config)
     except Exception:
         return grid
@@ -166,18 +161,14 @@ def _read_montage(montage: np.ndarray, config: str = _MONTAGE_CONFIG) -> np.ndar
 
 
 def predict_sudoku_grid(cells, prepared: bool = True) -> np.ndarray:
-    """
-    Recognize digits in a 9x9 matrix of cell images.
+    """Recognize digits in a 9x9 cell matrix; 0 for empty/unread cells."""
+    config = _MONTAGE_CONFIG if prepared else _UNPREPARED_CONFIG
+    retry_config = _MONTAGE_RETRY_CONFIG if prepared else _UNPREPARED_RETRY_CONFIG
 
-    Two montage passes: the first reads all non-empty cells at once; cells
-    it missed are retried on their own montage with sparse-text mode, so
-    faint digits are not lost while the runtime stays near one Tesseract
-    call per pass.
+    grid = _read_montage(_build_montage(cells, prepared), config=config)
 
-    Returns a 9x9 numpy array (0 for empty cells).
-    """
-    grid = _read_montage(_build_montage(cells, prepared))
-
+    # Second pass: cells the first montage missed, isolated on their own
+    # montage in sparse-text mode.
     missed = np.zeros((9, 9), dtype=bool)
     for row in range(9):
         for col in range(9):
@@ -185,8 +176,22 @@ def predict_sudoku_grid(cells, prepared: bool = True) -> np.ndarray:
                 missed[row, col] = True
     if missed.any():
         retry = _read_montage(
-            _build_montage(cells, prepared, only=missed), config=_MONTAGE_RETRY_CONFIG
+            _build_montage(cells, prepared, only=missed), config=retry_config
         )
         grid = np.where((grid == 0) & missed, retry, grid)
 
     return grid
+
+
+def ocr_single_cell(cell: np.ndarray) -> int:
+    """Single-character OCR for one prepared cell; 0 when unreadable."""
+    canvas = preprocess_cell(cell)
+    if canvas is None or canvas.size == 0:
+        return 0
+    canvas = cv2.resize(canvas, (64, 64), interpolation=cv2.INTER_NEAREST)
+    try:
+        text = pytesseract.image_to_string(canvas, config=_SINGLE_CELL_CONFIG)
+    except Exception:
+        return 0
+    text = text.strip()
+    return int(text) if len(text) == 1 and text in _DIGITS else 0

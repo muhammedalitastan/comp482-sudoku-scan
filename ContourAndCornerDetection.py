@@ -1,18 +1,9 @@
-"""
-Stage 2 - Harris corner detection and automatic corner selection.
+"""Stage 2 - Harris corner detection and outer-corner selection.
 
-Pipeline:
-  1. cv2.cornerHarris on the blurred grayscale image
-  2. keep only local maxima above a relative threshold
-  3. greedy non-maximum suppression to enforce a minimum spacing
-  4. locate the grid REGION with contours (largest external contour +
-     cv2.approxPolyDP) - used only to find the region, never as a corner
-     source
-  5. match every region vertex to the NEAREST Harris local maximum inside
-     a small window (fallback: x+y / x-y rule over all candidates)
-  6. refine the 4 corners with cv2.cornerSubPix
-
-Corner coordinates always come from Harris detection.
+cornerHarris -> local maxima -> greedy NMS -> optional contour region
+proposal -> match each vertex to the nearest Harris maximum -> cornerSubPix.
+Final corner coordinates always come from the Harris response map; contours
+only tell us where to look.
 """
 
 import cv2
@@ -46,7 +37,7 @@ class HarrisDetection:
 
 
 def _local_maxima(response: np.ndarray, threshold: float, min_distance: int) -> np.ndarray:
-    """Pixel coordinates of local maxima above threshold, strongest first."""
+    """Pixel coords of local maxima above threshold, strongest first."""
     size = 2 * min_distance + 1
     kernel = np.ones((size, size), np.uint8)
     dilated = cv2.dilate(response, kernel)
@@ -58,7 +49,7 @@ def _local_maxima(response: np.ndarray, threshold: float, min_distance: int) -> 
 
 
 def _non_maximum_suppression(corners: np.ndarray, min_distance: int) -> np.ndarray:
-    """Greedy NMS: keep corners in order, drop any within min_distance of a kept one."""
+    """Greedy NMS: drop corners within min_distance of a stronger kept one."""
     if len(corners) == 0:
         return corners
     keep = []
@@ -74,12 +65,7 @@ def _non_maximum_suppression(corners: np.ndarray, min_distance: int) -> np.ndarr
 
 
 def _find_region_vertices(region_map: np.ndarray):
-    """
-    Region finding only: largest external contour of the binary map,
-    approximated to 4 vertices with cv2.approxPolyDP.
-
-    Returns (4, 2) float32 vertices in contour order, or None.
-    """
+    """Region only: largest contour approximated to 4 vertices. Not a corner source."""
     contours, _ = cv2.findContours(region_map, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if not contours:
         return None
@@ -107,7 +93,7 @@ def _extreme_index(values: np.ndarray, mode: str, exclude: set) -> int:
 
 
 def _order_quad_points(points: np.ndarray) -> np.ndarray:
-    """Order 4 points as [TL, TR, BR, BL] with the x+y / x-y rule."""
+    """Order 4 points as [TL, TR, BR, BL] using the x+y / x-y rule."""
     sum_scores = points[:, 0] + points[:, 1]
     diff_scores = points[:, 0] - points[:, 1]
     tl = _extreme_index(sum_scores, "min", set())
@@ -118,13 +104,7 @@ def _order_quad_points(points: np.ndarray) -> np.ndarray:
 
 
 def _match_vertices(vertices: np.ndarray, response: np.ndarray, radius: float, floor: float):
-    """
-    For every ordered region vertex, find the Harris local maximum nearest
-    to it inside a (2*radius) window. Returns (4, 2) or None.
-
-    The corner coordinate comes from the Harris response maximum; the
-    region vertex only tells us WHERE to look.
-    """
+    """Nearest Harris maximum to each ordered vertex, inside a (2*radius) window."""
     h, w = response.shape
     kernel = np.ones((5, 5), np.uint8)
     matched = []
@@ -176,15 +156,8 @@ def _validate_quadrilateral(points: np.ndarray, image_shape) -> None:
 
 def select_outer_corners(corners: np.ndarray, image_shape) -> np.ndarray:
     """
-    Fallback rule-based selection of the 4 outer corners (TL, TR, BR, BL).
-
-    Scores are computed from the corner coordinates only (x grows to the
-    right, y grows downwards):
-      x + y  -> TL is the minimum, BR is the maximum
-      x - y  -> TR is the maximum, BL is the minimum
-
-    The four picks are forced to be distinct, and the resulting quadrilateral
-    must be convex and cover at least 2% of the image area.
+    Fallback: pick the 4 outer corners by the x+y / x-y rule and validate
+    the quadrilateral (convex, >= 2% of image area). Returns [TL,TR,BR,BL].
     """
     if len(corners) < 4:
         raise CornerNotFoundError(
@@ -209,18 +182,7 @@ def find_sudoku_grid(
     region_map: np.ndarray | None = None,
     params: HarrisParams | None = None,
 ) -> HarrisDetection:
-    """
-    Detect the 4 Sudoku grid corners with Harris corner detection.
-
-    Args:
-        gray: blurred grayscale image (Harris + subpixel refinement)
-        region_map: binary image (adaptive threshold) used ONLY to find the
-            grid region; None disables contour guidance
-        params: Harris parameters
-
-    Returns a HarrisDetection. When no valid quadrilateral can be selected,
-    corners is None and message explains why.
-    """
+    """Detect the 4 Sudoku corners. corners is None with a message on failure."""
     params = params or HarrisParams()
     h, w = gray.shape
 
