@@ -1,25 +1,14 @@
 #!/usr/bin/env python3
-"""
-Stage 4 metric script - Affine vs. Homography comparison.
+"""Stage 4 metric script - A3 vs A4 vs H4 comparison.
 
-For every image with a result JSON and ground-truth annotation, computes:
+Per image: corner residuals (from the result JSON), grid-line straightness
+(from the result JSON) and the SAME prepared-cell OCR run on all three
+rectifications, scored against ground truth. Obliqueness is joined from an
+optional CSV index (columns "image" + "side_ratio" or "obliqueness_deg").
 
-  * corner residual        : A3 4th-corner error and A4 RMS error
-                             (read from the result JSON)
-  * grid straightness      : mean deviation of the 10+10 grid lines from the
-                             ideal 50 px positions (read from the result JSON)
-  * recognition accuracy   : the SAME OCR step (prepared cells) run on the
-                             A3, A4 and H4 rectified images, scored against
-                             the ground-truth grid
-
-Obliqueness (side_ratio) is joined from an optional CSV index (e.g. the
-development-set index.csv). For the personal dataset, provide a CSV with
-columns "image" and "side_ratio" (or "obliqueness_deg") for the same join.
-
-Usage (development set):
+Usage (dev set):
     python compare_rectifications.py
-
-Usage (personal dataset):
+Usage (personal set):
     python compare_rectifications.py --results out/ --annotations labels/ \
         --index my_index.csv --out comparison.csv
 """

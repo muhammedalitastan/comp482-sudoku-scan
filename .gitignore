@@ -1,5 +1,7 @@
 __pycache__/
 *.py[cod]
 test_out/
+test_photos/
 results/
 out/
+devset_results/

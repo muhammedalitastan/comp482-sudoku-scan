@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
-"""
-SudokuScan - COMP 482 Computer Vision Project 1.
+"""SudokuScan - COMP 482 Computer Vision Project 1.
 
-Converts a Sudoku photo into a 9x9 digit matrix using Harris corner
-detection, geometric rectification (A3/A4 affine, H4 homography), Tesseract
-OCR and a Sudoku validity check.
+Sudoku photo -> 9x9 digit matrix via Harris corners, A3/A4/H4
+rectification, Tesseract OCR and a validity check.
 
 Usage:
-    python sudoku_scan.py photo.jpg --outdir results/
-    python sudoku_scan.py --batch images/ --outdir results/
+    python sudoku_scan.py input photo.jpg --outdir out/
+    python sudoku_scan.py --batch images_dir/ --outdir results/
 """
 
 import argparse
@@ -26,7 +24,7 @@ from GRİDsEGMENTATİON import extract_sudoku_cells
 from Metrics import calculate_grid_line_straightness
 from PersPektifTransform import rectify_A3_affine, rectify_A4_affine, rectify_H4_homography
 from Preproccessing import preprocess_image
-from SayıKontrolVeTanıma import predict_sudoku_grid
+from SayıKontrolVeTanıma import ocr_single_cell, predict_sudoku_grid
 from ValidityCheck import check_sudoku_validity
 
 CELL_SIZE = 50  # 450 / 9
@@ -34,10 +32,7 @@ MIN_SUDOKU_GIVENS = 17  # minimum givens for a unique Sudoku solution
 
 
 def create_debug_image(warped: np.ndarray, grid: np.ndarray, conflicts) -> np.ndarray:
-    """
-    H4 rectified image with grid lines, recognized digits and conflicting
-    cells highlighted in red.
-    """
+    """H4 image with grid lines, recognized digits and red conflict cells."""
     debug = (
         cv2.cvtColor(warped, cv2.COLOR_GRAY2BGR)
         if warped.ndim == 2
@@ -75,7 +70,7 @@ def create_debug_image(warped: np.ndarray, grid: np.ndarray, conflicts) -> np.nd
 
 
 def _empty_result(image_path: str) -> dict:
-    """Result template; every field is filled in as the pipeline progresses."""
+    """Result template; fields are filled in as the pipeline progresses."""
     return {
         # Required output fields (assignment spec)
         "corners": None,
@@ -211,6 +206,21 @@ def process_single_image(image_path: str, outdir: str, harris_params: HarrisPara
         # Stage 6: Validity check
         t = time.time()
         is_valid, conflicts = check_sudoku_validity(grid)
+
+        # Conflict-driven re-recognition: cells involved in a rule violation
+        # are re-read one by one in single-character mode. The refined grid
+        # is kept only when it produces fewer conflicts.
+        if conflicts:
+            refined = grid.copy()
+            for row, col in conflicts:
+                digit = ocr_single_cell(cells[row][col])
+                if digit:
+                    refined[row, col] = digit
+            refined_valid, refined_conflicts = check_sudoku_validity(refined)
+            if len(refined_conflicts) < len(conflicts):
+                grid = refined
+                is_valid, conflicts = refined_valid, refined_conflicts
+                result["grid"] = grid.tolist()
         stage_times["validity_check"] = round(time.time() - t, 3)
 
         result["validity"] = {
