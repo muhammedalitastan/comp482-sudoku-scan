@@ -1,0 +1,28 @@
+{
+  "corners": null,
+  "A3": null,
+  "A4": null,
+  "H4": null,
+  "a3_corner_err_px": null,
+  "a4_rms_px": null,
+  "grid": null,
+  "verdict": "not_found",
+  "runtime_s": 0.138,
+  "image_path": "test_photos\\2.jpeg",
+  "message": "no Harris corner found near a grid vertex",
+  "corner_selection_method": null,
+  "grid_unprepared": null,
+  "grid_line_deviation": null,
+  "validity": {
+    "is_valid": null,
+    "conflicts": []
+  },
+  "ocr": {
+    "prepared_non_empty": null,
+    "unprepared_non_empty": null
+  },
+  "stage_times": {
+    "preprocessing": 0.052,
+    "corner_detection": 0.067
+  }
+}
