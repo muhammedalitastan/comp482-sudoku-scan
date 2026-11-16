@@ -20,11 +20,11 @@ class HarrisParams:
     block_size: int = 2
     ksize: int = 3
     k: float = 0.04
-    threshold_ratio: float = 0.01  # fraction of the maximum Harris response
+    threshold_ratio: float = 0.005  # fraction of the maximum Harris response
     nms_distance: int | None = None  # None -> 1% of the smallest image side
     max_candidates: int = 2000
-    vertex_radius_ratio: float = 0.015  # search radius around a region vertex
-    vertex_floor_ratio: float = 0.002  # min Harris response for vertex matching
+    vertex_radius_ratio: float = 0.025  # search radius around a region vertex
+    vertex_floor_ratio: float = 0.0002  # min Harris response for vertex matching
 
 
 @dataclass

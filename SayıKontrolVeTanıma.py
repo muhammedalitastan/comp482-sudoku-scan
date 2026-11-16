@@ -17,7 +17,7 @@ import pytesseract
 if os.path.exists(r"C:\Program Files\Tesseract-OCR\tesseract.exe"):
     pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
-_MIN_INK_RATIO = 0.02
+_MIN_INK_RATIO = 0.035
 _DIGITS = "123456789"
 
 

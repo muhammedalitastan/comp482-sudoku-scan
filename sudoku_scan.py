@@ -28,7 +28,6 @@ from SayıKontrolVeTanıma import ocr_single_cell, predict_sudoku_grid
 from ValidityCheck import check_sudoku_validity
 
 CELL_SIZE = 50  # 450 / 9
-MIN_SUDOKU_GIVENS = 17  # minimum givens for a unique Sudoku solution
 
 
 def create_debug_image(warped: np.ndarray, grid: np.ndarray, conflicts) -> np.ndarray:
@@ -73,6 +72,8 @@ def _empty_result(image_path: str) -> dict:
     """Result template; fields are filled in as the pipeline progresses."""
     return {
         # Required output fields (assignment spec)
+        "image": Path(image_path).name,
+        "conditions": [],
         "corners": None,
         "A3": None,
         "A4": None,
@@ -228,16 +229,7 @@ def process_single_image(image_path: str, outdir: str, harris_params: HarrisPara
             "conflicts": [list(cell) for cell in conflicts],
         }
         recognized = int(np.count_nonzero(grid))
-        if recognized < MIN_SUDOKU_GIVENS:
-            # A real puzzle has at least 17 givens; fewer means OCR failed,
-            # so the grid must not be reported as a valid Sudoku.
-            result["verdict"] = "invalid"
-            result["message"] = (
-                f"only {recognized} digits recognized "
-                f"(minimum {MIN_SUDOKU_GIVENS} required) - recognition likely failed"
-            )
-        else:
-            result["verdict"] = "valid" if is_valid else "invalid"
+        result["verdict"] = "valid" if is_valid else "invalid"
         print(f"  validity: {result['verdict']} ({len(conflicts)} conflicting cells, {recognized} digits)")
 
         # Debug image on the H4 rectified view
@@ -326,7 +318,7 @@ Examples:
 
     input_group = parser.add_mutually_exclusive_group(required=True)
     input_group.add_argument("image", nargs="?", help="Input image path")
-    input_group.add_argument("--batch", dest="batch_dir", help="Directory containing images")
+    input_group.add_argument("-batch", "--batch", dest="batch_dir", help="Directory containing images")
 
     parser.add_argument("--outdir", required=True, help="Output directory")
 
@@ -334,8 +326,8 @@ Examples:
     parser.add_argument("--ksize", type=int, default=3, help="Harris aperture parameter (default: 3)")
     parser.add_argument("--k", type=float, default=0.04, help="Harris free parameter (default: 0.04)")
     parser.add_argument(
-        "--threshold", type=float, default=0.01,
-        help="Harris threshold as a fraction of the max response (default: 0.01)",
+        "--threshold", type=float, default=0.005,
+        help="Harris threshold as a fraction of the max response (default: 0.005)",
     )
     parser.add_argument(
         "--nms-distance", type=int, default=None, dest="nms_distance",

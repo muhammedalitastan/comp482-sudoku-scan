@@ -1,9 +1,4 @@
-"""
-Stage 5 helper - cell extraction.
-
-Splits a 450x450 rectified image into 81 cells (50x50 px each) and crops an
-inner margin from every cell so the grid lines are excluded before OCR.
-"""
+"""Stage 5 helper - split a 450x450 rectified image into 81 cropped cells."""
 
 GRID_SIZE = 9
 TARGET_SIZE = 450
@@ -16,10 +11,7 @@ def extract_sudoku_cells(
     target_size: int = TARGET_SIZE,
     margin_ratio: float = MARGIN_RATIO,
 ):
-    """
-    Returns a grid_size x grid_size list of cell images with the inner
-    margin removed.
-    """
+    """9x9 list of cell images with the inner margin removed."""
     if warped.shape[0] != target_size or warped.shape[1] != target_size:
         raise ValueError(
             f"expected a {target_size}x{target_size} rectified image, "

@@ -1,4 +1,6 @@
 {
+  "image": "3.jpeg",
+  "conditions": [],
   "corners": [
     [
       366.0,
@@ -162,7 +164,7 @@
     ]
   ],
   "verdict": "invalid",
-  "runtime_s": 1.036,
+  "runtime_s": 1.654,
   "image_path": "test_photos\\3.jpeg",
   "message": "",
   "corner_selection_method": "contour+harris",
@@ -540,11 +542,11 @@
     "unprepared_non_empty": 27
   },
   "stage_times": {
-    "preprocessing": 0.054,
-    "corner_detection": 0.076,
-    "rectification": 0.002,
-    "metrics": 0.004,
-    "ocr": 0.595,
-    "validity_check": 0.276
+    "preprocessing": 0.092,
+    "corner_detection": 0.11,
+    "rectification": 0.004,
+    "metrics": 0.005,
+    "ocr": 0.916,
+    "validity_check": 0.473
   }
 }
