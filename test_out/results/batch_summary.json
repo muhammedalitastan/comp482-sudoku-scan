@@ -1,0 +1,8 @@
+{
+  "total_images": 10,
+  "verdicts": {
+    "invalid": 5,
+    "valid": 5
+  },
+  "mean_runtime_seconds": 1.91
+}
